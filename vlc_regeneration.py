@@ -39,6 +39,10 @@ async def play_mkv_files(mkv_directory, srt_directory):
             
             for mkv_file,srt_file in zip_longest(sort_mkv_files, sort_srt_files):
                 if srt_file is None:
+                    if mkv_file is None:
+                        print('ファイル準備中...')
+                        time.sleep(10)
+                        continue
                     mkv_file_number = int(re.search(r'\d+', mkv_file).group())
                     
                     mkv_file_path = os.path.join(mkv_directory, mkv_file)
@@ -54,6 +58,11 @@ async def play_mkv_files(mkv_directory, srt_directory):
                     duration = player.get_length() / 1000
                     time.sleep(duration)
                 else:
+                    if mkv_file is None:
+                        print('ファイル準備中...')
+                        time.sleep(10)
+                        continue
+                    
                     mkv_file_number = int(re.search(r'\d+', mkv_file).group())
                     srt_file_number = int(re.search(r'\d+', srt_file).group())
                 
@@ -109,5 +118,5 @@ async def main():
     await play_mkv_files(mkv_file, srt_file)
 
 if __name__ == '__main__':
-    time.sleep(30)
+    time.sleep(600)
     asyncio.run(main())
