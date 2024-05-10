@@ -6,8 +6,8 @@ import aiofiles
 from moviepy.editor import VideoFileClip
 
 import write_subtitle_text
-import vlc_regeneration
 import video_path
+import file_remove
 
 
 #############################################################
@@ -21,8 +21,8 @@ async def response_valid(url):
 
 ##########################################################
 # ライブ配信のm3u8ファイルを取得し、tsファイルを取得していく
-##########################################################
-async def download_ts_segments(playlist_url, output_dir, count, m3u8_files):
+##########################################################  # これが非同期で常に実行してるので、ファイル削除をするときにプロセス使用中とでる。　同期処理にしたらどうなるか。
+async def download_ts_segments(playlist_url, output_dir, count, m3u8_files, i):
     async with aiohttp.ClientSession() as session:
         async with session.get(playlist_url) as response:
             playlist = m3u8.loads(await response.text())
@@ -37,7 +37,23 @@ async def download_ts_segments(playlist_url, output_dir, count, m3u8_files):
                             print(f'Downloaded: {ts_url}')
                         count += 1
                         m3u8_files.append(ts_url)
-            
+                        if i > 60:
+                            try:
+                                asyncio.sleep(1)
+                                loop = asyncio.get_running_loop()
+                                
+                                await loop.run_in_executor(None, os.remove, os.path.join(video_path.os.environ.get('AUDIO_FILE_PATH'), f'output_audio{i-61}.wav'))
+                                asyncio.sleep(1)
+                                await loop.run_in_executor(None, os.remove, os.path.join(video_path.os.environ.get('SRT_DIRECTORY'), f'subtitle{i-61}.srt'))
+                                asyncio.sleep(1)
+                                await loop.run_in_executor(None, os.remove, os.path.join(video_path.os.environ.get('MKV_DIRECTORY'), f'output{i-61}.mkv'))
+                                # os.remove(os.path.join(video_path.os.environ.get('AUDIO_FILE_PATH'), f'output_audio{i-11}.wav'))
+                                # asyncio.sleep(1)
+                                # os.remove(os.path.join(video_path.os.environ.get('SRT_DIRECTORY'), f'subtitle{i-11}.srt'))
+                                # asyncio.sleep(1)
+                                # os.remove(os.path.join(video_path.os.environ.get('MKV_DIRECTORY'), f'output{i-11}.mkv'))
+                            except FileNotFoundError:
+                                pass
             return count
 
 
@@ -59,8 +75,6 @@ async def main():
     count = 0 
     i = 0
     
-    mkv_dir = video_path.os.environ.get('MKV_DIRECTORY')
-    srt_dir = video_path.os.environ.get('SRT_DIRECTORY')
     subtitle_srt = os.path.join(video_path.os.environ.get('SRT_DIRECTORY'), f'subtitle{i}.srt')
     
     output_dir = video_path.os.environ.get('VIDEO_FILE_PATH')
@@ -69,7 +83,7 @@ async def main():
         video_file = os.path.join(video_path.os.environ.get('VIDEO_FILE_PATH'), f'file{i}.ts')
         audio_file = os.path.join(video_path.os.environ.get('AUDIO_FILE_PATH'), f'output_audio{i}.wav')
         status_valid = await response_valid(url)
-        count = await download_ts_segments(url, output_dir, count, files_name)
+        count = await download_ts_segments(url, output_dir, count, files_name, i)
         
         # 動画ファイルが存在しなかったらpass、存在したら音声抽出する
         if not os.path.exists(video_file):
@@ -87,9 +101,6 @@ async def main():
                 await write_subtitle_text.transform_mkv(video_file, audio_file, subtitle_srt, i)
             else:
                 await write_subtitle_text.transform_mkv(video_file, audio_file, subtitle_srt, i)
-            vlc_regeneration.play_mkv_files(mkv_dir, srt_dir)
-        
-        
         
         
         # ライブ配信が終わったらbreakする
