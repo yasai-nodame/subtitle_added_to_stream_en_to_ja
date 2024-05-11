@@ -37,23 +37,7 @@ async def download_ts_segments(playlist_url, output_dir, count, m3u8_files, i):
                             print(f'Downloaded: {ts_url}')
                         count += 1
                         m3u8_files.append(ts_url)
-                        if i > 60:
-                            try:
-                                asyncio.sleep(1)
-                                loop = asyncio.get_running_loop()
-                                
-                                await loop.run_in_executor(None, os.remove, os.path.join(video_path.os.environ.get('AUDIO_FILE_PATH'), f'output_audio{i-61}.wav'))
-                                asyncio.sleep(1)
-                                await loop.run_in_executor(None, os.remove, os.path.join(video_path.os.environ.get('SRT_DIRECTORY'), f'subtitle{i-61}.srt'))
-                                asyncio.sleep(1)
-                                await loop.run_in_executor(None, os.remove, os.path.join(video_path.os.environ.get('MKV_DIRECTORY'), f'output{i-61}.mkv'))
-                                # os.remove(os.path.join(video_path.os.environ.get('AUDIO_FILE_PATH'), f'output_audio{i-11}.wav'))
-                                # asyncio.sleep(1)
-                                # os.remove(os.path.join(video_path.os.environ.get('SRT_DIRECTORY'), f'subtitle{i-11}.srt'))
-                                # asyncio.sleep(1)
-                                # os.remove(os.path.join(video_path.os.environ.get('MKV_DIRECTORY'), f'output{i-11}.mkv'))
-                            except FileNotFoundError:
-                                pass
+                        
             return count
 
 
