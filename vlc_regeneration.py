@@ -6,6 +6,7 @@ from itertools import zip_longest
 import asyncio
 
 import video_path
+import file_remove
 
 #############################################################################
 # mkvファイルが存在するまで回す
@@ -13,7 +14,7 @@ import video_path
 # mkvファイルが存在して、srtファイルが存在しない場合、mkvファイルだけ回し続ける
 # srtファイルが存在しない時は、音声を認識してないか、喋ってないかのどちらか
 #############################################################################
-async def play_mkv_files(mkv_directory, srt_directory):
+async def play_mkv_files(mkv_directory, srt_directory, lock):
     # VLC インスタンス化
     instance = vlc.Instance('--sub-source marq')
     player = instance.media_player_new()
@@ -45,16 +46,21 @@ async def play_mkv_files(mkv_directory, srt_directory):
                     print('ファイルに追いつくので、60秒遅延を発生させます。')
                     time.sleep(60)
                 
-                    media = instance.media_new(mkv_file_path)
-                    player.set_media(media)
-                    player.play()
-                    playing_mkv_files.add(mkv_file)
+                media = instance.media_new(mkv_file_path)
+                player.set_media(media)
+                player.play()
+                playing_mkv_files.add(mkv_file)
             
                 while player.get_state() != vlc.State.Playing:
                     time.sleep(0.1)
                 
                 duration = player.get_length() / 1000
                 time.sleep(duration)
+                
+                if mkv_file_number > 50:
+                    async with lock:
+                        # await asyncio.sleep(0.1)
+                        await file_remove.test(mkv_file_number - 51)
             else:
                 mkv_file_number = int(re.search(r'\d+', mkv_file).group())
                 srt_file_number = int(re.search(r'\d+', srt_file).group())
@@ -86,6 +92,11 @@ async def play_mkv_files(mkv_directory, srt_directory):
                     duration = player.get_length() / 1000
                     time.sleep(duration)
                     
+                    if mkv_file_number > 50:
+                        async with lock:
+                            # await asyncio.sleep(0.1)
+                            await file_remove.test(mkv_file_number - 51)
+                        
                 elif mkv_file_number != srt_file_number:
                         mkv_file_path = os.path.join(mkv_directory, mkv_file)
                         
@@ -94,6 +105,7 @@ async def play_mkv_files(mkv_directory, srt_directory):
                         if len(os.listdir(mkv_directory)[:-10]) < mkv_file_number:
                             print('ファイルに追いつくので、60秒遅延を発生させます。')
                             time.sleep(60)
+                        
                         media = instance.media_new(mkv_file_path)
                         player.set_media(media)
                         player.play()
@@ -104,6 +116,10 @@ async def play_mkv_files(mkv_directory, srt_directory):
                         
                         duration = player.get_length() / 1000
                         time.sleep(duration)
+                        if mkv_file_number > 50:
+                            async with lock:
+                                # await asyncio.sleep(0.1)
+                                await file_remove.test(mkv_file_number - 51)
             
             # 再生が終了したファイルを再生リストから削除
             for mkv_file, srt_file in zip(playing_mkv_files.copy(), playing_srt_files.copy()):
@@ -112,20 +128,21 @@ async def play_mkv_files(mkv_directory, srt_directory):
                 if not os.path.exists(os.path.join(srt_directory, srt_file)):
                     playing_srt_files.remove(srt_file)
             
-                    
             break
         
 
 async def main():
     mkv_file = video_path.os.environ.get('MKV_DIRECTORY')
     srt_file = video_path.os.environ.get('SRT_DIRECTORY')
+    lock = asyncio.Lock()
+    
     print('約60秒後に、ライブを再生します。')
     while True:
         if len(os.listdir(mkv_file)) > 60:
-            await play_mkv_files(mkv_file, srt_file)
+            await play_mkv_files(mkv_file, srt_file, lock)
         else:
             continue
         
-
+        
 if __name__ == '__main__':
     asyncio.run(main())
