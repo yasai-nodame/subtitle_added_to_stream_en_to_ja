@@ -1,8 +1,6 @@
 import speech_recognition as sr
 import os
-import asyncio
 import ffmpeg
-import aiofiles
 
 import video_duration
 import video_path
@@ -45,6 +43,7 @@ async def transform_mkv(video, audio, subtitle, count):
         output = (
         ffmpeg.output(input_video['v'], input_audio['a'], os.path.join(video_path.os.environ.get('MKV_DIRECTORY'), f'output{count}.mkv'), c='copy')
     )
+        
     else:
         input_subtitle = ffmpeg.input(subtitle)
         output = (
