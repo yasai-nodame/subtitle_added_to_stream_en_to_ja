@@ -59,7 +59,6 @@ async def play_mkv_files(mkv_directory, srt_directory, lock):
                 
                 if mkv_file_number > 50:
                     async with lock:
-                        # await asyncio.sleep(0.1)
                         await file_remove.test(mkv_file_number - 51)
             else:
                 mkv_file_number = int(re.search(r'\d+', mkv_file).group())
@@ -94,7 +93,6 @@ async def play_mkv_files(mkv_directory, srt_directory, lock):
                     
                     if mkv_file_number > 50:
                         async with lock:
-                            # await asyncio.sleep(0.1)
                             await file_remove.test(mkv_file_number - 51)
                         
                 elif mkv_file_number != srt_file_number:
@@ -116,9 +114,9 @@ async def play_mkv_files(mkv_directory, srt_directory, lock):
                         
                         duration = player.get_length() / 1000
                         time.sleep(duration)
+                        
                         if mkv_file_number > 50:
                             async with lock:
-                                # await asyncio.sleep(0.1)
                                 await file_remove.test(mkv_file_number - 51)
             
             # 再生が終了したファイルを再生リストから削除
