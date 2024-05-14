@@ -8,6 +8,7 @@ import time
 
 import write_subtitle_text
 import video_path
+import file_remove 
 
 
 #############################################################
@@ -22,7 +23,7 @@ async def response_valid(url):
 ##########################################################
 # ライブ配信のm3u8ファイルを取得し、tsファイルを取得していく
 ##########################################################  # これが非同期で常に実行してるので、ファイル削除をするときにプロセス使用中とでる。　同期処理にしたらどうなるか。
-async def download_ts_segments(playlist_url, output_dir, count, m3u8_files, i):
+async def download_ts_segments(playlist_url, output_dir, count, m3u8_files):
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(playlist_url) as response:
@@ -43,6 +44,10 @@ async def download_ts_segments(playlist_url, output_dir, count, m3u8_files, i):
     except Exception as e:
         print('エラーが発生しました。', e)
 
+# m3u8_download.pyにもファイル処理をして、実行したら、1時間7分再生し続けることができた。
+# mkv,ts,wavファイルは3つとも平均800ファイルだった。　まだファイル削除がスムーズではない。
+# ファイルの容量による、メモリ負担のせいで、ファイル解凍エラーになるのかなと思った。
+# 次にすることは、ファイル削除のスピードをあげること。　ファイル総数を減らせば、再生時間が伸びると思っている。
 
 ###################################################
 # 取得したtsファイルから音声だけを切り出して取得する
@@ -58,7 +63,8 @@ async def main():
     url = video_path.os.environ.get('TWICH_URL')
     count = 0 
     i = 0
-    global processing_time
+    lock = asyncio.Lock()
+    
     subtitle_srt = os.path.join(video_path.os.environ.get('SRT_DIRECTORY'), f'subtitle{i}.srt')
     
     output_dir = video_path.os.environ.get('VIDEO_FILE_PATH')
@@ -67,14 +73,18 @@ async def main():
         video_file = os.path.join(video_path.os.environ.get('VIDEO_FILE_PATH'), f'file{i}.ts')
         audio_file = os.path.join(video_path.os.environ.get('AUDIO_FILE_PATH'), f'output_audio{i}.wav')
         status_valid = await response_valid(url)
-        count = await download_ts_segments(url, output_dir, count, files_name, i)
+        count = await download_ts_segments(url, output_dir, count, files_name)
+        
+        if i > 100:
+            async with lock:
+                await file_remove.ts_remove(i - 101)
         
         # 動画ファイルが存在しなかったらpass、存在したら音声抽出する
         if not os.path.exists(video_file):
             continue
         else:
             # ビデオと音声を切り離す
-            processing_time = await extract_audio_async(video_file, audio_file)
+            await extract_audio_async(video_file, audio_file)
             
             # 音声ファイルからテキスト抽出、ビデオファイルから時間抽出、srtファイル生成
             await write_subtitle_text.extracted_from_audio(audio_file, video_file, i)
