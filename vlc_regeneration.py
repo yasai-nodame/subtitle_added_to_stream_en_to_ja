@@ -8,15 +8,12 @@ import asyncio
 import video_path
 import file_remove
 
-#############################################################################
-# mkvファイルが存在するまで回す
-# srtファイルも存在してる場合、mkvファイルの連番と等しい時に動画に埋め込む
-# mkvファイルが存在して、srtファイルが存在しない場合、mkvファイルだけ回し続ける
-# srtファイルが存在しない時は、音声を認識してないか、喋ってないかのどちらか
-#############################################################################
+###########################################
+# VLCで、ライブ配信のファイルを再生し続ける
+###########################################
 async def play_mkv_files(mkv_directory, srt_directory, lock):
     # VLC インスタンス化
-    instance = vlc.Instance('--sub-source marq')
+    instance = vlc.Instance('--sub-source=marq')
     player = instance.media_player_new()
     
     playing_mkv_files = set()
@@ -43,23 +40,39 @@ async def play_mkv_files(mkv_directory, srt_directory, lock):
                 mkv_file_path = os.path.join(mkv_directory, mkv_file)
                 
                 if len(os.listdir(mkv_directory)[:-10]) < mkv_file_number:
-                    print('ファイルに追いつくので、60秒遅延を発生させます。')
-                    time.sleep(60)
+                    print('ファイルに追いつくので、100秒遅延を発生させます。')
+                    time.sleep(100)
                 
                 media = instance.media_new(mkv_file_path)
                 player.set_media(media)
-                player.play()
+                
+                if player.play() == -1:
+                    print(f'ファイルが破損していました。: {mkv_file_path}')
+                    time.sleep(3)
+                    continue
+                
                 playing_mkv_files.add(mkv_file)
             
-                while player.get_state() != vlc.State.Playing:
+                start_time = time.time()
+                while player.get_state() not in (vlc.State.Playing, vlc.State.Error, vlc.State.Ended):
+                    if time.time() - start_time > 2:
+                        print(f'再生が開始されませんでした。: {mkv_file_path}')
+                        player.stop()
+                        break 
                     time.sleep(0.1)
                 
-                duration = player.get_length() / 1000
-                time.sleep(duration)
+                if player.get_state() in (vlc.State.Error, vlc.State.Ended):
+                    print(f'再生中にエラーが発生しました。: {mkv_file_path}')
+                    time.sleep(3)
+                    continue 
+                
+                if player.get_state() == vlc.State.playing:
+                    duration = player.get_length() / 1000
+                    time.sleep(duration)
                 
                 if mkv_file_number > 50:
                     async with lock:
-                        await file_remove.test(mkv_file_number - 51)
+                        await file_remove.file_remove(mkv_file_number - 51)
             else:
                 mkv_file_number = int(re.search(r'\d+', mkv_file).group())
                 srt_file_number = int(re.search(r'\d+', srt_file).group())
@@ -71,29 +84,44 @@ async def play_mkv_files(mkv_directory, srt_directory, lock):
                     mkv_file_number = int(re.search(r'\d+', mkv_file).group())
                     
                     if len(os.listdir(mkv_directory)[:-10]) < mkv_file_number:
-                        print('ファイルに追いつくので、60秒遅延を発生させます。')
-                        time.sleep(60)
+                        print('ファイルに追いつくので、100秒遅延を発生させます。')
+                        time.sleep(100)
                     
                     # mkv ファイルを再生
                     media = instance.media_new(mkv_file_path)
                     media.add_option(f':sub-file={srt_file_path}')
-                    
                     player.set_media(media)
-                    player.play()
+                    
+                    if player.play() == -1:
+                        print(f'ファイルが破損していました。: {mkv_file_path}')
+                        time.sleep(3)
+                        continue 
+                    
                     playing_mkv_files.add(mkv_file)
                     playing_srt_files.add(srt_file)
                     
-                    # ファイルが再生されるまで待機
-                    while player.get_state() != vlc.State.Playing:
+                    start_time = time.time()
+                    while player.get_state() not in (vlc.State.Playing, vlc.State.Error, vlc.State.Ended): 
+                        if time.time() - start_time > 2:
+                            print(f'再生が開始されませんでした。: {mkv_file_path}')
+                            player.stop()
+                            break 
                         time.sleep(0.1)
                     
-                    # 再生が終了するまで待機
-                    duration = player.get_length() / 1000
-                    time.sleep(duration)
+                    if player.get_state() in (vlc.State.Error, vlc.State.Ended):
+                        print(f'再生中にエラーが発生しました。: {mkv_file_path}')
+                        time.sleep(3)
+                        continue 
+                    
+                    
+                    if player.get_state() == vlc.State.Playing:
+                        # 再生が終了するまで待機
+                        duration = player.get_length() / 1000
+                        time.sleep(duration)
                     
                     if mkv_file_number > 50:
                         async with lock:
-                            await file_remove.test(mkv_file_number - 51)
+                            await file_remove.file_remove(mkv_file_number - 51)
                         
                 elif mkv_file_number != srt_file_number:
                         mkv_file_path = os.path.join(mkv_directory, mkv_file)
@@ -101,23 +129,40 @@ async def play_mkv_files(mkv_directory, srt_directory, lock):
                         mkv_file_number = int(re.search(r'\d+', mkv_file).group())
                         
                         if len(os.listdir(mkv_directory)[:-10]) < mkv_file_number:
-                            print('ファイルに追いつくので、60秒遅延を発生させます。')
-                            time.sleep(60)
-                        
+                            print('ファイルに追いつくので、100秒遅延を発生させます。')
+                            time.sleep(100)
+                            
                         media = instance.media_new(mkv_file_path)
                         player.set_media(media)
-                        player.play()
+                        
+                        if player.play() == -1:
+                            print(f'ファイルが破損していました。: {mkv_file_path}')
+                            time.sleep(3)
+                            continue 
+                        
+                            
                         playing_mkv_files.add(mkv_file)
                         
-                        while player.get_state() != vlc.State.Playing:
+                        start_time = time.time()
+                        while player.get_state() not in (vlc.State.Playing, vlc.State.Error, vlc.State.Ended):
+                            if time.time() - start_time > 2:
+                                print(f'再生が開始されませんでした。: {mkv_file_path}')
+                                player.stop()
+                                break
                             time.sleep(0.1)
                         
-                        duration = player.get_length() / 1000
-                        time.sleep(duration)
+                        if player.get_state() in (vlc.State.Error, vlc.State.Ended):
+                            print(f'再生中にエラーが発生しました。: {mkv_file_path}')
+                            time.sleep(3)
+                            continue
+                        
+                        if player.get_state() == vlc.State.Playing:
+                            duration = player.get_length() / 1000
+                            time.sleep(duration)
                         
                         if mkv_file_number > 50:
                             async with lock:
-                                await file_remove.test(mkv_file_number - 51)
+                                await file_remove.file_remove(mkv_file_number - 51)
             
             # 再生が終了したファイルを再生リストから削除
             for mkv_file, srt_file in zip(playing_mkv_files.copy(), playing_srt_files.copy()):
@@ -134,9 +179,9 @@ async def main():
     srt_file = video_path.os.environ.get('SRT_DIRECTORY')
     lock = asyncio.Lock()
     
-    print('約60秒後に、ライブを再生します。')
+    print('約100秒後に、ライブを再生します。')
     while True:
-        if len(os.listdir(mkv_file)) > 60:
+        if len(os.listdir(mkv_file)) > 100:
             await play_mkv_files(mkv_file, srt_file, lock)
         else:
             continue
